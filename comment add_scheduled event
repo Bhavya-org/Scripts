@@ -16,8 +16,8 @@ def postRequest(String url, Map body) {
 }
 
 // Step 1: Define the JQL query
-def projectKey = 'KBT'
-def jqlQuery = URLEncoder.encode("project = ${projectKey} AND fixVersion IS NOT EMPTY AND component = Test AND issuetype = Story", 'UTF-8')
+def projectKey = 'PSO'
+def jqlQuery = URLEncoder.encode("project = ${projectKey} AND status = \"Waiting for creator\" AND priority = High AND NOT status CHANGED AFTER -1d", 'UTF-8')
 def searchUrl = "/rest/api/3/search?jql=${jqlQuery}"
 
 // Step 2: Search for issues matching the JQL query
