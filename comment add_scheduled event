@@ -16,8 +16,8 @@ def postRequest(String url, Map body) {
 }
 
 // Step 1: Define the JQL query
-def projectKey = 'PSO'
-def jqlQuery = URLEncoder.encode("project = ${projectKey} AND status = \"Waiting for creator\" AND priority = High AND NOT status CHANGED AFTER -1d", 'UTF-8')
+def projectKey = 'KBT'
+def jqlQuery = URLEncoder.encode("project = ${projectKey} AND status = \"In Progress\" AND priority = Medium AND NOT status CHANGED AFTER -1d", 'UTF-8')
 def searchUrl = "/rest/api/3/search?jql=${jqlQuery}"
 
 // Step 2: Search for issues matching the JQL query
@@ -27,22 +27,14 @@ if (searchResult.status == 200 && searchResult.body.containsKey('issues')) {
     def issues = searchResult.body.issues
 
     // Define the comment text to be added
-    def commentTextTemplate = """
-    Hi [~accountid:{reporter}] [~accountid:{assignee}],
-
-    Please update story points estimate as this story is already DoR ready.
+    def commentText = """
+    AUTOMATED MESSAGE:
+    This ticket with a HIGH priority is in status "waiting for creator" for 1 days.
+    The ticket will be deprioritized to medium after 5 days.
     """
-
-    def commentText = "Please update story points estimate as this story is already DoR ready."
 
     issues.each { issue ->
         def issueKey = issue.key
-        def reporter = issue.fields.reporter?.accountId
-        def assignee = issue.fields.assignee?.accountId
-        
-        def commentTextInstance = commentTextTemplate
-            .replace("{reporter}", reporter ?: "")
-            .replace("{assignee}", assignee ?: "")
 
         // Step 3: Get existing comments for the issue
         def commentsResult = getRequest('/rest/api/2/issue/' + issueKey + '/comment')
@@ -57,7 +49,7 @@ if (searchResult.status == 200 && searchResult.body.containsKey('issues')) {
 
             // Step 5: Add the new comment only if it doesn't already exist
             if (!commentAlreadyExists) {
-                def addCommentResult = postRequest('/rest/api/2/issue/' + issueKey + '/comment', ["body": commentTextInstance.trim()])
+                def addCommentResult = postRequest('/rest/api/2/issue/' + issueKey + '/comment', ["body": commentText.trim()])
                 if (addCommentResult.status == 201) {
                     println("Comment added to issue ${issueKey}.")
                 } else {
