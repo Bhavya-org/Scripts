@@ -1,0 +1,12 @@
+Condition if request type equals to New tide
+
+and issue matches jql single selct list feidls 5 
+
+action:
+create issue in destinaton
+summary copy from current issue
+description
+reporter
+Linked issue -->Trigger issue is caused by
+
+attachment current issue
