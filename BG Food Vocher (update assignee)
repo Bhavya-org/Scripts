@@ -1,0 +1,27 @@
+def issueKey = 'JP-105'
+
+// Fetch the issue details
+def result = get('/rest/api/2/issue/' + issueKey)
+        .header('Content-Type', 'application/json')
+        .asObject(Map)
+
+if (result.status == 200){
+    def requestType = result.body.fields.customfield_10010?.requestType?.name
+    def changeType = result.body.fields.customfield_10005?.value
+    println(requestType)
+    println(changeType)
+    // Check conditions
+    if (requestType == 'Fix an account problem' && changeType == 'Standard') {
+        // If conditions are met, update the assignee
+        def newAssigneeAccountId = '6305b88c958ffd78c6e0e59e' // Use the account ID of the new assignee 
+        def updateResult = put('/rest/api/3/issue/' + issueKey + '/assignee')
+                .header('Content-Type', 'application/json')
+                .body([
+                        accountId: newAssigneeAccountId
+                ])
+                .asString()
+
+        // Return a message if the assignee update is successful
+        if (updateResult.status == 204) return "Assignee updated successfully."
+    }
+}
