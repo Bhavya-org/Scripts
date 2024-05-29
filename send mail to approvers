@@ -1,0 +1,92 @@
+import groovy.json.JsonOutput
+
+def issueKey = "JP-105"
+def ApproversId = "customfield_10003"
+def requestParticipantsFieldId = "customfield_10127"
+
+def issueResponse = get('/rest/api/2/issue/' + issueKey)
+.header('Content-Type', 'application/json')
+.asObject(Map)
+
+if (issueResponse.status != 200) {
+    return
+}
+
+def issueDetails = issueResponse.body
+def customFieldValue = issueDetails.fields[ApproversId]
+
+if (!customFieldValue) {
+    return
+}
+
+// Send notification to approvers
+def notificationPayload = [
+    subject: "A request has been raised at IT helpdesk that needs your approval.",
+    textBody: "Kindly follow the link and provide a response to the request. https://tideaccount.atlassian.net/servicedesk/customer/portal/8/${issueKey}",
+    to: [
+        users: customFieldValue.collect { user -> [accountId: user.accountId] }
+    ]
+]
+
+def notifyResponse = post("/rest/api/2/issue/${issueKey}/notify")
+.header("Content-Type", "application/json")
+.body(JsonOutput.toJson(notificationPayload))
+.asString()
+
+if (!(notifyResponse.status >= 200 && notifyResponse.status < 300)) {
+    return
+}
+
+// Update request participants
+def requestParticipantsValue = customFieldValue.collect { user -> [accountId: user.accountId] }
+
+def updatePayload = [
+    fields: [
+        (requestParticipantsFieldId): requestParticipantsValue
+    ]
+]
+
+def updateResponse = put("/rest/api/2/issue/${issueKey}")
+.header("Content-Type", "application/json")
+.body(JsonOutput.toJson(updatePayload))
+.asString()
+
+if (!(updateResponse.status >= 200 && updateResponse.status < 300)) {
+    return
+}
+
+// Prepare the comment text
+def commentText = """Hello @${issueDetails.fields.reporter.displayName}
+
+We would require the approver to confirm approval on this ticket to allow us to proceed further with this request.
+
+Kind Regards
+IT HelpDesk"""
+
+// Fetch existing comments
+def commentsResponse = get("/rest/api/2/issue/${issueKey}/comment")
+.header("Content-Type", "application/json")
+.asObject(Map)
+
+if (commentsResponse.status != 200) {
+    return
+}
+
+def comments = commentsResponse.body.comments
+
+// Check if the comment already exists
+def commentAlreadyExists = comments.any { comment ->
+    comment.body.trim() == commentText.trim()
+}
+
+if (!commentAlreadyExists) {
+    // Add the new comment only if it doesn't already exist
+    def addCommentResult = post('/rest/api/2/issue/' + issueKey + '/comment')
+        .header('Content-Type', 'application/json')
+        .body(["body": commentText.trim()])
+        .asObject(Map)
+
+    println(addCommentResult) // This should output the response from Jira, you can check if it was successful
+} else {
+    println("Duplicate comment found, not adding a new one.")
+}
