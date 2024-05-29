@@ -1,0 +1,33 @@
+def issueKey = "JP-105"
+
+// Fetch the issue details
+def result = get('/rest/api/2/issue/' + issueKey)
+        .header('Content-Type', 'application/json')
+        .asObject(Map)
+
+if (result.status == 200) {
+    def requestType = result.body.fields.customfield_10010?.requestType?.name
+    println(requestType)
+   
+    // Check conditions
+    if (['IT Support', 'Get IT help', 'Fix an account problem'].contains(requestType)) {
+       
+        def newSecurityLevelId = '10002' // Provide the ID of the new security level
+        def securityLevelUpdateResult = put('/rest/api/3/issue/' + issueKey)
+                .header('Content-Type', 'application/json')
+                .body([
+                        fields: [
+                                security: [
+                                        id: newSecurityLevelId
+                                ]
+                        ]
+                ])
+                .asString()
+ 
+        // Return a message if the security level update is successful
+        if (securityLevelUpdateResult.status == 204) return "Security level updated successfully."
+    }
+}
+
+// Return an error message if the GET request fails
+return "Failed to find issue: Status: ${result.status} ${result.body}"
