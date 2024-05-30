@@ -1,0 +1,98 @@
+import groovy.json.JsonBuilder
+
+def issueKey = 'JP-105'
+
+// Function to make REST API GET requests
+def getRequest(String url) {
+    return get(url)
+        .header('Content-Type', 'application/json')
+        .asObject(Map)
+}
+
+// Function to make REST API PUT requests
+def putRequest(String url, Map body) {
+    return put(url)
+        .header('Content-Type', 'application/json')
+        .body(body)
+        .asObject(Map)
+}
+
+// Function to make REST API POST requests
+def postRequest(String url, Map body) {
+    return post(url)
+        .header('Content-Type', 'application/json')
+        .body(body)
+        .asObject(Map)
+}
+
+// Fetch the issue details
+def issueDetails = getRequest('/rest/api/2/issue/' + issueKey)
+
+if (issueDetails.status == 200) {
+    def fields = issueDetails.body.fields
+    def requestType = fields.customfield_10010?.requestType?.name
+    def changeType = fields.customfield_10005?.value
+
+    // Check conditions
+    if (requestType == "Fix an account problem" &&
+        !fields.labels?.any { it.contains("dsar_legal_first_signoff_requested") } &&
+        !fields.labels?.contains("dsar_legal_first_signoff_approved")) {
+        // Update the request participants field with the correct structure
+        def newRequestParticipants = [
+            [
+                "accountId": "6305b88c958ffd78c6e0e59e"
+            ],
+            [
+                "accountId": "630a0d15ec02b5f28b63a024"
+            ]
+        ]
+
+        // Calculate due date 30 days from today
+        def today = new Date()
+        def dueDate = today + 30
+
+        // Update the issue fields
+        def updateResult = putRequest('/rest/api/2/issue/' + issueKey, [
+            fields: [
+                customfield_10127: newRequestParticipants,
+                customfield_10005: [value: "Normal"],
+                labels: ["dser_legal_sign_of_requested"],
+                duedate: dueDate.format('yyyy-MM-dd')
+            ]
+        ])
+
+        if (updateResult.status == 204) {
+            // Define the comment text to be added
+            def commentText = """
+            AUTOMATED MESSAGE1:
+            This ticket with a HIGH priority is in status "waiting for creator" for 1 day.
+            The ticket will be deprioritized to medium after 5 days.
+            """
+
+            // Get existing comments for the issue
+            def commentsResult = getRequest('/rest/api/2/issue/' + issueKey + '/comment')
+
+            if (commentsResult.status == 200 && commentsResult.body.containsKey('comments')) {
+                def comments = commentsResult.body.comments
+
+                // Check for duplicate comments
+                def commentAlreadyExists = comments.any { comment ->
+                    comment.body.contains(commentText.trim())
+                }
+
+                // Add the new comment only if it doesn't already exist
+                if (!commentAlreadyExists) {
+                    def addCommentResult = postRequest('/rest/api/2/issue/' + issueKey + '/comment', ["body": commentText.trim()])
+                    if (addCommentResult.status == 201) {
+                        // Transition the issue
+                        def transitionResult = postRequest("/rest/api/3/issue/${issueKey}/transitions", ["transition": ["id": "21"]])
+                        if (transitionResult.status != 204) {
+                            // Handle failed transition
+                            // Add any necessary error handling here
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
