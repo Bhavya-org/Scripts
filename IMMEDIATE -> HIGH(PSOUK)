@@ -1,0 +1,84 @@
+import java.net.URLEncoder
+
+// Function to make REST API GET requests
+def getRequest(String url) {
+    return get(url)
+        .header('Content-Type', 'application/json')
+        .asObject(Map)
+}
+
+// Function to make REST API POST requests
+def postRequest(String url, Map body) {
+    return post(url)
+        .header('Content-Type', 'application/json')
+        .body(body)
+        .asObject(Map)
+}
+
+// Function to make REST API PUT requests
+def putRequest(String url, Map body) {
+    return put(url)
+        .header('Content-Type', 'application/json')
+        .body(body)
+        .asString()
+}
+
+// Step 1: Define the JQL query
+def projectKey = 'U9'
+def jqlQuery = URLEncoder.encode("project = ${projectKey} AND status = \"In Progress\" AND priority = \"Medium\" AND NOT status CHANGED AFTER -1d", 'UTF-8')
+def searchUrl = "/rest/api/3/search?jql=${jqlQuery}"
+
+// Step 2: Search for issues matching the JQL query
+def searchResult = getRequest(searchUrl)
+
+if (searchResult.status == 200 && searchResult.body.containsKey('issues')) {
+    def issues = searchResult.body.issues
+
+    // Define the comment text to be added
+    def commentText = """
+    AUTOMATED MESSAGE:
+    This ticket with a HIGH priority is in status "waiting for creator" for 1 days.
+    The ticket will be deprioritized to medium after 5 days.
+    """
+
+    issues.each { issue ->
+        def issueKey = issue.key
+
+        // Step 3: Get existing comments for the issue
+        def commentsResult = getRequest('/rest/api/2/issue/' + issueKey + '/comment')
+
+        if (commentsResult.status == 200 && commentsResult.body.containsKey('comments')) {
+            def comments = commentsResult.body.comments
+
+            // Step 4: Check for duplicate comments
+            def commentAlreadyExists = comments.any { comment ->
+                comment.body.contains(commentText.trim())
+            }
+
+            // Step 5: Add the new comment only if it doesn't already exist
+            if (!commentAlreadyExists) {
+                def addCommentResult = postRequest('/rest/api/2/issue/' + issueKey + '/comment', ["body": commentText.trim()])
+                if (addCommentResult.status == 201) {
+                    println("Comment added to issue ${issueKey}.")
+                } else {
+                    println("Failed to add comment to issue ${issueKey}.")
+                }
+            } else {
+                println("Duplicate comment found for issue ${issueKey}, not adding a new one.")
+            }
+        } else {
+            println("Failed to retrieve comments for issue ${issueKey}.")
+        }
+
+        // Step 6: Update the priority field
+        def newPriority = 'High'
+        def updatePriorityResult = putRequest('/rest/api/2/issue/' + issueKey, ["fields": ["priority": ["name": newPriority]]])
+        if (updatePriorityResult.status == 204) {
+            println("Priority updated for issue ${issueKey}.")
+        } else {
+            println("Failed to update priority for issue ${issueKey}. Status: ${updatePriorityResult.status}")
+        }
+    }
+} else {
+    println("Failed to search for issues. Status: ${searchResult.status}")
+}
