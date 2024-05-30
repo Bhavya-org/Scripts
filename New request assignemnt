@@ -1,0 +1,8 @@
+def issueKey = issue.key
+def newAssigneeAccountId = '6305b88c958ffd78c6e0e59e' // Use the account ID of the new assignee 
+def result = put('/rest/api/3/issue/' + issueKey + '/assignee')
+        .header('Content-Type', 'application/json')
+        .body([
+                accountId: newAssigneeAccountId
+        ])
+        .asString()
