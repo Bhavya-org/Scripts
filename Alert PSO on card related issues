@@ -1,0 +1,46 @@
+def issueKey = 'JP-105'
+
+def issueResult = get('/rest/api/2/issue/' + issueKey)
+    .header('Content-Type', 'application/json')
+    .asObject(Map)
+
+def reporter = issueResult.body.fields.reporter?.accountId
+def assignee = issueResult.body.fields.assignee?.accountId
+
+def commentText1 = """
+======= AUTOMATED COMMENT 1 ========
+
+${reporter}, please confirm if this request is for an OPEN ACCESS, or DIRECT ACCESS member!
+For DA, please specify if the request is for a closed membership, in KYC or abandoned before KYC.
+
+Thank you!
+"""
+
+// Step 2: Get existing comments for the issue
+def commentsResult = get('/rest/api/2/issue/' + issueKey + '/comment')
+    .header('Content-Type', 'application/json')
+    .asObject(Map)
+
+// Step 3: Check for duplicate comments
+def comments = commentsResult.body.comments
+def commentAlreadyExists1 = comments.any { comment ->
+    comment.body.contains(commentText1.trim())
+}
+
+def requestType = issueResult.body.fields.customfield_10010?.requestType?.name
+
+if (requestType == "Fix an account problem") {
+    if (!commentAlreadyExists1) {
+        // Step 4: Add the new comment only if it doesn't already exist
+        def addCommentResult1 = post('/rest/api/2/issue/' + issueKey + '/comment')
+            .header('Content-Type', 'application/json')
+            .body(["body": commentText1.trim()])
+            .asObject(Map)
+
+        println("comment added") // This should output the response from Jira, you can check if it was successful
+    } else {
+        println("Duplicate comment found, not adding a new one.")
+    }
+} else {
+    println("Request type is not 'Fix an account problem', skipping automated comments.")
+}
