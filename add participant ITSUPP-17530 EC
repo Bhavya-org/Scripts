@@ -1,0 +1,65 @@
+def issueKey = 'JP-105'
+
+// Fetch the issue details
+def result = get('/rest/api/2/issue/' + issueKey)
+        .header('Content-Type', 'application/json')
+        .asObject(Map)
+
+// Return the result if the GET request is successful
+if (result.status == 200) {
+    def fields = result.body.fields
+    def requestType = fields.customfield_10010?.requestType?.name
+    def accountId = "6305b88c958ffd78c6e0e59e"
+
+    // Check conditions
+    if (requestType == 'Fix an account problem') {
+
+        // Update the request participants field with the correct structure
+        def newRequestParticipants = [
+            [
+                "accountId": accountId
+            ]
+        ]
+
+        def updateResult = put('/rest/api/2/issue/' + issueKey)
+                .header('Content-Type', 'application/json')
+                .body([
+                        fields: [
+                                customfield_10127: newRequestParticipants // Use the correct custom field ID
+                        ]
+                ])
+                .asString()
+                
+        // Check if the update was successful
+        if (updateResult.status == 204) {
+            // Send a notification to the specified user
+            def resp = post("/rest/api/2/issue/${issueKey}/notify")
+                .header("Content-Type", "application/json")
+                .body([
+                    subject: "Assigned issue - ${issueKey}",
+                    textBody: "Body",
+                    htmlBody: "test",
+                    to: [
+                        users: [
+                            [
+                                accountId: '63060b97189e0a3a4ff283dc'
+                            ]
+                        ]
+                    ]
+                ])
+                .asString()
+
+            if (resp.status == 204) {
+                return "Notification sent successfully."
+            } else {
+                return "Failed to send notification. Status: ${resp.status}"
+            }
+        } else {
+            return "Failed to update request participants. Status: ${updateResult.status}"
+        }
+    } else {
+        return "Request type is not 'Fix an account problem'."
+    }
+} else {
+    return "Failed to fetch issue details. Status: ${result.status}"
+}
