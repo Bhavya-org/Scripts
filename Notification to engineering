@@ -1,0 +1,37 @@
+import groovy.json.JsonSlurper
+
+// Replace 'your_issue_key' with the key of the issue you're interested in
+def issueKey = "U9-21"
+
+// Jira REST API endpoint to get issue details
+def endpoint = get("/rest/api/latest/issue/${issueKey}?expand=changelog")
+        .asObject(Map)
+
+// Get the issue details
+def issueDetails = endpoint.body
+
+// Get the status change history
+def changelog = issueDetails.changelog
+
+// Define the "from" statuses and "to" statuses as arrays
+// def fromStatuses = ['*']
+def toStatuses = ['In Progress']
+
+// Check if the most recent update was a transition from one of the "from" statuses to one of the "to" statuses
+def isRecentTransition = changelog.histories.first()?.items.any { item ->
+    item.field == 'status' && toStatuses.contains(item.toString)
+}
+
+if (isRecentTransition) {
+    // Add a comment to the issue
+    def watcherAccountId = '6305b88c958ffd78c6e0e59e' // Use the account ID of the watcher
+    def result = post('/rest/api/3/issue/' + issueKey + '/watchers')
+            .header('Content-Type', 'application/json')
+            .body("\"${watcherAccountId}\"")
+            .asString()
+    if (result.status == 204) {
+        println("Watcher added to issue ${issueKey}.")
+    } else {
+        println("Failed to add watcher to issue ${issueKey}.")
+}
+}
