@@ -1,56 +1,46 @@
 import groovy.json.JsonOutput
 
-def issueKey = "JP-105"
+def issueKey = issue.key
 def newAssigneeAccountId = '6305b88c958ffd78c6e0e59e' // Use the account ID of the new assignee
 
-// Get the issue details
-def issueDetails = get('/rest/api/3/issue/' + issueKey)
-    .header('Content-Type', 'application/json')
-    .asObject(Map)
+def requestType = issue.fields.customfield_10848?.requestType?.name.toString()
 
-if (issueDetails.status == 200) {
-    def requestType = issueDetails.body.fields.customfield_10010?.requestType?.name
-    println(requestType)
+if (["Ask a data privacy question", "Report a personal data breach", "Start a DPIA", "Member Support Privacy Query", "Suggest a Privacy helpdesk feature", "Sharing Tide personal data externally with a third-party"].contains(requestType)) {
+    // Update the assignee
+    def resultAssignee = put('/rest/api/3/issue/' + issueKey + '/assignee')
+        .header('Content-Type', 'application/json')
+        .body([
+            accountId: newAssigneeAccountId
+        ])
+        .asString()
 
-    if (requestType == "Get IT help") {
-        // Update the assignee
-        def resultAssignee = put('/rest/api/3/issue/' + issueKey + '/assignee')
-            .header('Content-Type', 'application/json')
-            .body([
-                accountId: newAssigneeAccountId
-            ])
-            .asString()
+    if (resultAssignee.status == 204) {
+        println "Assignee updated successfully."
 
-        if (resultAssignee.status == 204) {
-            println "Assignee updated successfully."
-
-            // Send notification to approvers
-            def notificationPayload = [
-                subject: "A request has been raised at IT helpdesk that needs your approval.",
-                textBody: "Kindly follow the link and provide a response to the request. https://tideaccount.atlassian.net/servicedesk/customer/portal/8/${issueKey}",
-                to: [
-                    users: [
-                        [accountId: "63060b97189e0a3a4ff283dc"]
-                    ]
+        // Send notification to approvers
+        def notificationPayload = [
+            subject: "A request has been raised at IT helpdesk that needs your approval.",
+            textBody: "Kindly follow the link and provide a response to the request. https://tideaccount.atlassian.net/servicedesk/customer/portal/8/${issueKey}",
+            to: [
+                users: [
+                    [accountId: "63060b97189e0a3a4ff283dc"]
                 ]
             ]
+        ]
 
-            def notifyResponse = post("/rest/api/2/issue/${issueKey}/notify")
-                .header("Content-Type", "application/json")
-                .body(JsonOutput.toJson(notificationPayload))
-                .asString()
+        def notifyResponse = post("/rest/api/2/issue/${issueKey}/notify")
+            .header("Content-Type", "application/json")
+            .body(JsonOutput.toJson(notificationPayload))
+            .asString()
 
-            if (notifyResponse.status >= 200 && notifyResponse.status < 300) {
-                return "Notification sent successfully."
-            } else {
-                return "Failed to send notification."
-            }
+        if (notifyResponse.status >= 200 && notifyResponse.status < 300) {
+            return "Notification sent successfully."
         } else {
-            return "Failed to update assignee."
+            return "Failed to send notification."
         }
     } else {
-        return "Request type is not 'Get IT help'."
+        return "Failed to update assignee."
     }
 } else {
-    return "Failed to retrieve issue details."
+    return "Request type does not match the specified criteria."
 }
