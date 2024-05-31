@@ -1,0 +1,32 @@
+def issueKey = "KBT-106"
+def newAssigneeAccountId = '6305b88c958ffd78c6e0e59e' // Use the account ID of the new assignee
+
+// Get the issue details
+def issueDetails = get('/rest/api/3/issue/' + issueKey)
+    .header('Content-Type', 'application/json')
+    .asObject(Map)
+
+if (issueDetails.status == 200) {
+    def issueType = issueDetails.body.fields.issuetype.name
+    println(issueType)
+    
+    if(issueType == "Story") {
+        // Update the assignee
+        def resultAssignee = put('/rest/api/3/issue/' + issueKey + '/assignee')
+            .header('Content-Type', 'application/json')
+            .body([
+                accountId: newAssigneeAccountId
+            ])
+            .asString()
+
+        if (resultAssignee.status == 204) {
+            return "Assignee updated successfully."
+        } else {
+            return "Failed to update assignee: " + resultAssignee.body
+        }
+    } else {
+        return "Issue type is not 'Story'. No update performed."
+    }
+} else {
+    return "Failed to fetch issue details: " + issueDetails.body
+}
