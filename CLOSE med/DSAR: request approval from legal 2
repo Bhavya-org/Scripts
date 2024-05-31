@@ -1,6 +1,4 @@
-import groovy.json.JsonBuilder
-
-def issueKey = 'JP-105'
+import groovy.json.JsonSlurper
 
 // Function to make REST API GET requests
 def getRequest(String url) {
@@ -25,74 +23,120 @@ def postRequest(String url, Map body) {
         .asObject(Map)
 }
 
-// Fetch the issue details
-def issueDetails = getRequest('/rest/api/2/issue/' + issueKey)
+// Replace 'your_issue_key' with the key of the issue you're interested in
+def issueKey = "JP-105"
 
-if (issueDetails.status == 200) {
-    def fields = issueDetails.body.fields
-    def requestType = fields.customfield_10010?.requestType?.name
-    def changeType = fields.customfield_10005?.value
+// Jira REST API endpoint to get issue details with changelog
+def endpoint = get("/rest/api/latest/issue/${issueKey}?expand=changelog")
+        .asObject(Map)
 
-    // Check conditions
-    if (requestType == "Fix an account problem" &&
-        !fields.labels?.any { it.contains("dsar_legal_first_signoff_requested") } &&
-        !fields.labels?.contains("dsar_legal_first_signoff_approved")) {
-        // Update the request participants field with the correct structure
-        def newRequestParticipants = [
-            [
-                "accountId": "6305b88c958ffd78c6e0e59e"
-            ],
-            [
-                "accountId": "630a0d15ec02b5f28b63a024"
+// Get the issue details
+def issueDetails = endpoint.body
+
+// Get the status change history
+def changelog = issueDetails.changelog
+
+// Define the request type field key
+def requestTypeFieldKey = 'customfield_10010'
+
+// Check if the most recent update was a transition related to the request type field
+def isRecentField = false
+if (changelog?.histories) {
+    def latestHistory = changelog.histories.first()
+    if (latestHistory?.items) {
+        isRecentField = latestHistory.items.any { item ->
+            item.fieldId == requestTypeFieldKey
+        }
+    }
+}
+
+println "Is Recent Field: ${isRecentField}"
+
+// Proceed only if the recent field change was a request type change
+if (isRecentField) {
+    // Fetch the issue details without changelog
+    def issueDetails1 = getRequest('/rest/api/2/issue/' + issueKey)
+
+    if (issueDetails1.status == 200) {
+        def fields = issueDetails1.body.fields
+        def requestType = fields.customfield_10010?.requestType?.name
+
+        println "Request Type: ${requestType}"
+        println "Labels: ${fields.labels}"
+
+        // Check conditions
+        if (requestType == "Get IT help" &&
+            !fields.labels?.any { it.contains("dsar_legal_first_signoff_requested") } &&
+            !fields.labels?.contains("dsar_legal_first_signoff_approved")) {
+
+            // Update the request participants field with the correct structure
+            def newRequestParticipants = [
+                [
+                    "accountId": "6305b88c958ffd78c6e0e59e"
+                ],
+                [
+                    "accountId": "630a0d15ec02b5f28b63a024"
+                ]
             ]
-        ]
 
-        // Calculate due date 30 days from today
-        def today = new Date()
-        def dueDate = today + 30
+            // Calculate due date 30 days from today
+            def today = new Date()
+            def dueDate = today + 30
 
-        // Update the issue fields
-        def updateResult = putRequest('/rest/api/2/issue/' + issueKey, [
-            fields: [
-                customfield_10127: newRequestParticipants,
-                customfield_10005: [value: "Normal"],
-                labels: ["dser_legal_sign_of_requested"],
-                duedate: dueDate.format('yyyy-MM-dd')
-            ]
-        ])
+            // Update the issue fields
+            def updateResult = putRequest('/rest/api/2/issue/' + issueKey, [
+                fields: [
+                    customfield_10127: newRequestParticipants,
+                    customfield_10005: [value: "Normal"],
+                    duedate: dueDate.format('yyyy-MM-dd')
+                ]
+            ])
 
-        if (updateResult.status == 204) {
-            // Define the comment text to be added
-            def commentText = """
-            AUTOMATED MESSAGE1:
-            This ticket with a HIGH priority is in status "waiting for creator" for 1 day.
-            The ticket will be deprioritized to medium after 5 days.
-            """
+            println "Update Result: ${updateResult.status}"
 
-            // Get existing comments for the issue
-            def commentsResult = getRequest('/rest/api/2/issue/' + issueKey + '/comment')
+            if (updateResult.status == 204) {
+                // Define the comment text to be added
+                def commentText = """
+                Legal: Please review this request for validity and comment when approved to action for PSO!
+                """
 
-            if (commentsResult.status == 200 && commentsResult.body.containsKey('comments')) {
-                def comments = commentsResult.body.comments
+                // Get existing comments for the issue
+                def commentsResult = getRequest('/rest/api/2/issue/' + issueKey + '/comment')
 
-                // Check for duplicate comments
-                def commentAlreadyExists = comments.any { comment ->
-                    comment.body.contains(commentText.trim())
-                }
+                if (commentsResult.status == 200 && commentsResult.body.containsKey('comments')) {
+                    def comments = commentsResult.body.comments
 
-                // Add the new comment only if it doesn't already exist
-                if (!commentAlreadyExists) {
-                    def addCommentResult = postRequest('/rest/api/2/issue/' + issueKey + '/comment', ["body": commentText.trim()])
-                    if (addCommentResult.status == 201) {
-                        // Transition the issue
-                        def transitionResult = postRequest("/rest/api/3/issue/${issueKey}/transitions", ["transition": ["id": "21"]])
-                        if (transitionResult.status != 204) {
-                            // Handle failed transition
-                            // Add any necessary error handling here
+                    // Check for duplicate comments
+                    def commentAlreadyExists = comments.any { comment ->
+                        comment.body.contains(commentText.trim())
+                    }
+
+                    println "Comment Already Exists: ${commentAlreadyExists}"
+
+                    // Add the new comment only if it doesn't already exist
+                    if (!commentAlreadyExists) {
+                        def addCommentResult = postRequest('/rest/api/2/issue/' + issueKey + '/comment', ["body": commentText.trim()])
+                        println "Add Comment Result: ${addCommentResult.status}"
+
+                        if (addCommentResult.status == 201) {
+                            // Transition the issue
+                            def transitionResult = postRequest("/rest/api/3/issue/${issueKey}/transitions", ["transition": ["id": "21"]])
+                            println "Transition Result: ${transitionResult.status}"
+
+                            if (transitionResult.status != 204) {
+                                // Handle failed transition
+                                println "Transition Failed"
+                            }
                         }
                     }
                 }
             }
+        } else {
+            println "Conditions not met"
         }
+    } else {
+        println "Failed to fetch issue details: ${issueDetails1.status}"
     }
+} else {
+    println "Recent field change is not related to request type"
 }
