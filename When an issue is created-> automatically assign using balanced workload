@@ -1,0 +1,47 @@
+def issueKey = 'JP-105'
+
+// Fetch the issue details
+def result = get('/rest/api/2/issue/' + issueKey)
+        .header('Content-Type', 'application/json')
+        .asObject(Map)
+
+if (result.status == 200) {
+    def changeType = result.body.fields.customfield_10005?.value
+    def newAssigneeAccountId
+
+    switch (changeType) {
+        case 'Standard':
+            newAssigneeAccountId = '6305b88c958ffd78c6e0e59e'
+            break
+        case 'Normal':
+            newAssigneeAccountId = '630a0d15ec02b5f28b63a024'
+            break
+        case 'Emergency':
+            newAssigneeAccountId = '63d0b9efa197e05f9dadb169'
+            break
+        case ['Medium', 'High']:
+            newAssigneeAccountId = '63060b97189e0a3a4ff283dc'
+            break
+        default:
+            return
+    }
+
+    if (newAssigneeAccountId) {
+        // Update assignee
+        put('/rest/api/3/issue/' + issueKey + '/assignee')
+                .header('Content-Type', 'application/json')
+                .body([accountId: newAssigneeAccountId])
+                .asString()
+
+        // Update request participants
+        def newRequestParticipants = [
+            ["accountId": "6305b88c958ffd78c6e0e59e"],
+            ["accountId": "630a0d15ec02b5f28b63a024"]
+        ]
+
+        put('/rest/api/2/issue/' + issueKey)
+                .header('Content-Type', 'application/json')
+                .body([fields: [customfield_10127: newRequestParticipants]])
+                .asString()
+    }
+}
