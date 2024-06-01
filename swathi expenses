@@ -1,0 +1,27 @@
+def issueKey = issue.key
+def requestType = issue.fields.customfield_10010?.requestType?.name?.toString()
+def offices = issue.fields.customfield_10246?.value
+def newAssigneeAccountId = '6305b88c958ffd78c6e0e59e'
+
+// Print the values for debugging
+println("Issue Key: ${issueKey}")
+println("Request Type: ${requestType}")
+println("Offices: ${offices}")
+
+// Check conditions
+if (requestType == 'Get IT help' && offices == ['Hyd']) {
+    // Print a message indicating the condition is met
+    println("Condition met. Reassigning the issue...")
+
+    // Use the account ID of the new assignee
+    def result = put("/rest/api/3/issue/${issueKey}/assignee")
+        .header('Content-Type', 'application/json')
+        .body([ accountId: newAssigneeAccountId ])
+        .asString()
+        
+    // Print the result for debugging
+    println("Assignee change result: ${result}")
+} else {
+    // Print a message indicating the condition is not met
+    println("Conditions not met: requestType=${requestType}, offices=${offices}")
+}
