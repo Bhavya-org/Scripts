@@ -1,0 +1,50 @@
+import groovy.json.JsonSlurper
+
+def projectKey = 'JP'
+def jqlQuery = URLEncoder.encode("project = ${projectKey} AND priority = \"Medium\"", 'UTF-8')
+
+def searchResult = get("/rest/api/2/search?jql=${jqlQuery}")
+        .header("Content-Type", "application/json")
+        .asString()
+
+def jsonSlurper = new JsonSlurper()
+def issues = jsonSlurper.parseText(searchResult.body).issues
+
+issues.each { issue ->
+    def issueKey = issue.key
+    def newAssigneeAccountId = '6305b88c958ffd78c6e0e59e' // Use the account ID of the new assignee 
+    def result = put('/rest/api/3/issue/' + issueKey + '/assignee')
+            .header('Content-Type', 'application/json')
+            .body([
+                    accountId: newAssigneeAccountId
+            ])
+            .asString()
+
+    def resp = post("/rest/api/2/issue/${issueKey}/notify")
+            .header("Content-Type", "application/json")
+            .body([
+                    subject: "Assigned issue - ${issueKey}",
+                    textBody: "Body",
+                    htmlBody: "test",
+                    to: [
+                            users: [
+                                    [
+                                            accountId: '63d0b9efa197e05f9dadb169'
+                                    ]
+                            ]
+
+                    ]
+            ])
+            .asString()
+
+    def requestTypeId = "10" // Specify the ID of the request type you want to set as a string
+
+    def updateResult = put("/rest/api/2/issue/${issueKey}")
+            .header("Content-Type", "application/json")
+            .body([
+                    fields: [
+                            "customfield_10010": requestTypeId
+                    ]
+            ])
+            .asString()
+}
