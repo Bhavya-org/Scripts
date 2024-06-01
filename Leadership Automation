@@ -1,0 +1,32 @@
+def issueKey=issue.key
+    def reporterAccountId = issue.fields.reporter.accountId
+    def groupToCheck = 'Loc1'
+
+    def result = get("rest/api/2/user?accountId=${reporterAccountId}&expand=groups")
+            .header('Content-Type', 'application/json')
+            .asObject(Map)
+
+    if (result.status == 200) {
+        def user = result.body
+        def groups = user.groups.items.collect { it.name }
+
+        if (groups.contains(groupToCheck)) {
+            println "Reporter is in the group ${groupToCheck}."
+            addWatchers(issueKey, ['630a0d15ec02b5f28b63a024', '63176aa38d88ec800fbf9b17'])
+        } else {
+            println "Reporter is not in the group ${groupToCheck}."
+        }
+    } else {
+        println "Reporter with accountId ${reporterAccountId} not found."
+    }
+
+
+def addWatchers(issueKey, watcherAccountIds) {
+    watcherAccountIds.each { watcherAccountId ->
+        def watcherUpdate = post('/rest/api/3/issue/' + issueKey + '/watchers')
+                .header('Content-Type', 'application/json')
+                .body("\"${watcherAccountId}\"")
+                .asString()
+        println "Added watcher ${watcherAccountId} to the issue."
+    }
+}
