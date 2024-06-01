@@ -1,109 +1,61 @@
-def issueKey = 'JP-105'
+def issueKey = issue.key
+def requestType = issue.fields.customfield_10010?.requestType?.name?.toString()
+def accountId = "63060b97189e0a3a4ff283dc"
+def changeType = issue.fields.customfield_10005?.value
 
-// Fetch the issue details
-def result = get('/rest/api/2/issue/' + issueKey)
-        .header('Content-Type', 'application/json')
-        .asObject(Map)
+def newRequestParticipants = [
+    [
+        "accountId": accountId
+    ]
+]
 
-// Return the result if the GET request is successful
-if (result.status == 200) {
-    def fields = result.body.fields
-    def requestType = fields.customfield_10010?.requestType?.name
-    def accountId = "6305b88c958ffd78c6e0e59e"
-    def changeType = result.body.fields.customfield_10005?.value
-    // Check conditions
-    if (requestType == 'Fix an account problem') {
-
-        // Update the request participants field with the correct structure
-        def newRequestParticipants = [
-            [
-                "accountId": accountId
-            ]
-        ]
-
-        def updateResult = put('/rest/api/2/issue/' + issueKey)
-                .header('Content-Type', 'application/json')
-                .body([
-                        fields: [
-                                customfield_10127: newRequestParticipants // Use the correct custom field ID
-                        ]
-                ])
-                .asString()
-                
-        // Check if the update was successful
-        if (updateResult.status == 204) {
-            // Send a notification to the specified user
-            def resp = post("/rest/api/2/issue/${issueKey}/notify")
-                .header("Content-Type", "application/json")
-                .body([
-                    subject: "Assigned issue - ${issueKey}",
-                    textBody: "Body",
-                    htmlBody: "test",
-                    to: [
-                        users: [
-                            [
-                                accountId: '63060b97189e0a3a4ff283dc'
-                            ]
-                        ]
+def updateRequestParticipants = { ->
+    // Update the request participants field with the correct structure
+    def updateResult = put('/rest/api/2/issue/' + issueKey)
+            .header('Content-Type', 'application/json')
+            .body([
+                    fields: [
+                            customfield_10127: newRequestParticipants // Use the correct custom field ID
                     ]
-                ])
-                .asString()
+            ])
+            .asString()
 
-            if (resp.status == 204) {
-                return "Notification sent successfully."
-            } else {
-                return "Failed to send notification. Status: ${resp.status}"
-            }
+    return updateResult.status == 204
+}
+
+def sendNotification = { ->
+    // Send a notification to the specified user
+    def resp = post("/rest/api/2/issue/${issueKey}/notify")
+            .header("Content-Type", "application/json")
+            .body([
+                subject: "Assigned issue - ${issueKey}",
+                textBody: "Body",
+                htmlBody: "test",
+                to: [
+                    users: newRequestParticipants
+                ]
+            ])
+            .asString()
+
+    return resp.status == 204
+}
+
+def handleRequest = { ->
+    if (updateRequestParticipants()) {
+        if (sendNotification()) {
+            return "Request participants updated and notification sent successfully."
         } else {
-            return "Failed to update request participants. Status: ${updateResult.status}"
-        }
-    } else if (['IT help', 'Get IT help'].contains(requestType) && changeType == 'Normal') {
-        // Update the request participants field with the correct structure
-        def newRequestParticipants = [
-            [
-                "accountId": accountId
-            ]
-        ]
-
-        def updateResult = put('/rest/api/2/issue/' + issueKey)
-                .header('Content-Type', 'application/json')
-                .body([
-                        fields: [
-                                customfield_10127: newRequestParticipants // Use the correct custom field ID
-                        ]
-                ])
-                .asString()
-                
-        // Check if the update was successful
-        if (updateResult.status == 204) {
-            // Send a notification to the specified user
-            def resp = post("/rest/api/2/issue/${issueKey}/notify")
-                .header("Content-Type", "application/json")
-                .body([
-                    subject: "Assigned issue - ${issueKey}",
-                    textBody: "Body",
-                    htmlBody: "test",
-                    to: [
-                        users: [
-                            [
-                                accountId: '63060b97189e0a3a4ff283dc'
-                            ]
-                        ]
-                    ]
-                ])
-                .asString()
-
-            if (resp.status == 204) {
-                return "Notification sent successfully."
-            } else {
-                return "Failed to send notification. Status: ${resp.status}"
-            }
-        } else {
-            return "Failed to update request participants. Status: ${updateResult.status}"
+            return "Request participants updated, but failed to send notification."
         }
     } else {
-        return "Request type is not 'Fix an account problem', 'IT help', or 'Get IT help'."
+        return "Failed to update request participants."
     }
+}
+
+if (requestType == 'Fix an account problem') {
+    return handleRequest()
+} else if (['IT help', 'Get IT help'].contains(requestType) && changeType == 'Normal') {
+    return handleRequest()
 } else {
-    return "Failed to fetch issue details. Status: ${result.status}"
+    return "Request type is not 'Fix an account problem', 'IT help', or 'Get IT help'."
 }
