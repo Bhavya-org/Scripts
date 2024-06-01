@@ -1,0 +1,102 @@
+import groovy.json.JsonSlurper
+
+def sourceProjectKey = "JP"
+def targetProjectKey = "ITSAMPLE"
+def issueTypeNameToCheck = "Service request"
+def defaultLinkTypeName = "Relates"
+
+def issueKey = issue.key
+
+
+    // Check if the issue is in the source project
+    if (issue.fields.project.key == sourceProjectKey) {
+        def summary = issue.fields.summary
+        def description = issue.fields.description
+        def reporter = issue.fields.reporter
+        def changeType = issue.fields.customfield_10005
+        def requestType = issue.fields.customfield_10010?.requestType?.name // Corrected reference
+        def impact = issue.fields.customfield_10004?.value // Corrected reference
+
+        // Check if the request type is "Fix an account problem" and impact is "Minor / Localized"
+        if (requestType == "Fix an account problem" && impact == "Minor / Localized") {
+            def issueTypesResponse = get("/rest/api/2/issuetype")
+                .header('Content-Type', 'application/json')
+                .asObject(List)
+
+            if (issueTypesResponse.status == 200) {
+                def newSecurityLevelId = '10002' // Provide the ID of the new security level
+                def securityLevelUpdateResult = put('/rest/api/3/issue/' + issueKey)
+                .header('Content-Type', 'application/json')
+                .body([
+                        fields: [
+                                security: [
+                                        id: newSecurityLevelId
+                                ]
+                        ]
+                ])
+                .asString()
+
+                
+                def targetIssueTypeId = 10014
+
+                if (targetIssueTypeId) {
+                    def createIssuePayload = [
+                        fields: [
+                            project: [
+                                key: targetProjectKey
+                            ],
+                            summary: summary,
+                            description: description,
+                            reporter: reporter,
+                            customfield_10005: [value: "Normal"],
+                            issuetype: [
+                                id: targetIssueTypeId
+                            ]
+                        ]
+                    ]
+
+                    def createResult = post("/rest/api/2/issue")
+                        .header('Content-Type', 'application/json')
+                        .body(createIssuePayload)
+                        .asObject(Map)
+
+                    if (createResult.status == 201) {
+                        def newIssueKey = createResult.body.key
+
+                        def linkResult = post("/rest/api/2/issueLink")
+                            .header('Content-Type', 'application/json')
+                            .body([
+                                type: [
+                                    name: "Cloners"
+                                ],
+                                inwardIssue: [
+                                    key: issueKey
+                                ],
+                                outwardIssue: [
+                                    key: newIssueKey
+                                ]
+                            ])
+                            .asObject(Map)
+
+                        if (linkResult.status == 201) {
+                            println "Issue ${newIssueKey} created and linked to ${issueKey} successfully."
+                        } else {
+                            println "Failed to link issue ${newIssueKey} to ${issueKey}: ${linkResult.body}"
+                        }
+                    } else {
+                        println "Failed to create issue in ${targetProjectKey}: ${createResult.status}"
+                        println "Response body: ${createResult.body}"
+                    }
+                } else {
+                    println "Issue type '${issueTypeNameToCheck}' not found."
+                }
+            } else {
+                println "Failed to retrieve issue types: ${issueTypesResponse.status}"
+            }
+        } else {
+            println "Issue ${issueKey} does not meet the criteria for request type and impact."
+        }
+    } else {
+        println "Issue ${issueKey} is not in the source project ${sourceProjectKey}."
+    }
+
