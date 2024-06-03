@@ -1,0 +1,36 @@
+// Function to make REST API GET requests
+def getRequest(String url) {
+    return get(url)
+        .header('Content-Type', 'application/json')
+        .asObject(Map)
+}
+
+// Function to send a Slack message
+def sendSlackMessage(String issueKey) {
+    def webhookUrl = 'https://hooks.slack.com/services/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'
+    def msg = [
+        text: "The following issue has been transitioned to Confirmed ${issueKey}"
+    ]
+    post(webhookUrl)
+        .header('Content-Type', 'application/json')
+        .body(msg)
+        .asString()
+}
+
+// Step 1: Define the JQL query
+def jqlQuery = 'project = JP AND status in ("Awaiting approval", "In Progress", Open) AND summary ~ "🚨 Schedule: `" order by created DESC'
+
+// Step 2: Search for issues matching the JQL query
+def searchUrl = "/rest/api/3/search?jql=${URLEncoder.encode(jqlQuery, 'UTF-8')}"
+def searchResult = getRequest(searchUrl)
+
+if (searchResult.status == 200 && searchResult.body.containsKey('issues')) {
+    def issues = searchResult.body.issues
+
+    issues.each { issue ->
+        def issueKey = issue.key
+        sendSlackMessage(issueKey)
+    }
+} else {
+    println("Failed to search for issues. Status: ${searchResult.status}")
+}
