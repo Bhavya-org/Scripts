@@ -1,0 +1,54 @@
+import groovy.json.JsonSlurper
+import groovy.json.JsonOutput
+import java.net.URLEncoder
+
+def issueKey = "ROAD-54"
+
+// Function to send a notification
+def sendNotification(issueKey) {
+    def resp = post("/rest/api/2/issue/${issueKey}/notify")
+        .header("Content-Type", "application/json")
+        .body([
+            subject: "To Test notification - ${issueKey}",
+            htmlBody: "Did you get the mail?",
+            to: [
+                users: [
+                    [
+                        accountId: '63060b97189e0a3a4ff283dc'
+                    ]
+                ]
+            ]
+        ])
+        .asString()
+
+    if (resp.status == 204) {
+        return "Notification sent successfully for issue ${issueKey}."
+    } else {
+        return "Failed to send notification for issue ${issueKey}. Status: ${resp.status}, Response: ${resp.body}"
+    }
+}
+
+// JQL query to find issues
+def projectKey = 'ROAD'
+def jqlQuery = URLEncoder.encode("project = ${projectKey} AND due <= 1d", 'UTF-8')
+def searchUrl = "/rest/api/3/search?jql=${jqlQuery}"
+
+// Function to perform a GET request
+def getRequest(url) {
+    def response = get(url).header("Content-Type", "application/json").asString()
+    return new JsonSlurper().parseText(response.body)
+}
+
+// Step 2: Search for issues matching the JQL query
+def searchResult = getRequest(searchUrl)
+
+if (searchResult.issues) {
+    def issues = searchResult.issues
+
+    issues.each { issue ->
+        def result = sendNotification(issue.key)
+        println(result)
+    }
+} else {
+    println("No issues found matching the JQL query.")
+}
