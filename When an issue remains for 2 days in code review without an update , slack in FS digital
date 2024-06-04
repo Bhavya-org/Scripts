@@ -1,0 +1,39 @@
+import groovy.json.JsonOutput
+
+// Define the JQL query to check the conditions, including the custom field value
+def jqlQuery = 'project = "KBT" and (updated < startOfDay(-2d) or (updated < startOfWeek() and updated < startOfDay(-4d))) AND status = Open AND cf[10005] = "Normal" and assignee is not EMPTY'
+
+// Fetch issues that meet the JQL conditions
+def jqlResult = get("/rest/api/2/search")
+    .queryString("jql", jqlQuery)
+    .header('Content-Type', 'application/json')
+    .asObject(Map)
+
+if (jqlResult.status == 200) {
+    def issues = jqlResult.body.issues
+
+    // Iterate over the issues that match the JQL query
+    issues.each { issue ->
+        def issueKey = issue.key
+
+        // Define the Slack webhook URL
+        def webhookUrl = 'https://hooks.slack.com/services/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'
+
+        // Define the Slack message
+        def msg = [
+            text: "The following issue has been transitioned to Confirmed: https://tideaccount.atlassian.net/browse/${issueKey}"
+        ]
+
+        // Send the Slack notification
+        def slackResult = post(webhookUrl)
+            .header('Content-Type', 'application/json')
+            .body(JsonOutput.toJson(msg))
+            .asString()
+
+        if (slackResult.status != 200) {
+            println "Failed to send Slack notification: Status: ${slackResult.status} ${slackResult.body}"
+        }
+    }
+} else {
+    println "Failed to fetch issues with JQL: Status: ${jqlResult.status} ${jqlResult.body}"
+}
