@@ -19,58 +19,66 @@ if (searchResult.status == 200 && searchResult.body.containsKey('issues')) {
     issues.each { issue ->
         def issueKey = issue.key
         println "Processing Issue: ${issueKey}"
-
-        // Update issue field
-        def updateResult = put("/rest/api/2/issue/${issueKey}")
-            .header('Content-Type', 'application/json')
-            .body([
-                fields: [
-                    (selectListFieldId): [value: "4"]
-                ]
-            ])
-            .asString()
         
-        println "Update Result Status: ${updateResult.status}"
-        println "Update Result Body: ${updateResult.body}"
+        // Check if the select list field is empty
+        def fieldValue = issue.fields[selectListFieldId]
+        if (fieldValue == null || fieldValue.value == null) {
+            println "Field ${selectListFieldId} is empty for issue ${issueKey}"
 
-        if (updateResult.status == 204) { // Check if the update was successful
-            // Notify users
-            def notifyResult = post("/rest/api/2/issue/${issueKey}/notify")
-                .header("Content-Type", "application/json")
+            // Update issue field
+            def updateResult = put("/rest/api/2/issue/${issueKey}")
+                .header('Content-Type', 'application/json')
                 .body([
-                    subject: "Issue ${issueKey} has just been updated",
-                    htmlBody: "Defect ${issueKey} is out of SLA now!",
-                    to: [
-                        users: [
-                            [
-                                accountId: '63060b97189e0a3a4ff283dc' // Replace with the actual account ID
-                            ]
-                        ]
+                    fields: [
+                        (selectListFieldId): [value: "4"]
                     ]
                 ])
                 .asString()
             
-            println "Notify Result Status: ${notifyResult.status}"
-            println "Notify Result Body: ${notifyResult.body}"
-            
-            // Send notification to webhook
-            def webhookUrl = 'https://hooks.slack.com/services/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'
-            def msg = [
-                text: """Defect ${issueKey} <https://tideaccount.atlassian.net/browse/${issueKey}|${issue.fields.summary}> is now out of SLA.
-                Please consider it!
-                """
-            ]
-            
-            def webhookResponse = post(webhookUrl)
-                .header('Content-Type', 'application/json')
-                .body(msg)
-                .asString()
-            
-            println "Webhook Response Status: ${webhookResponse.status}"
-            println "Webhook Response Body: ${webhookResponse.body}"
+            println "Update Result Status: ${updateResult.status}"
+            println "Update Result Body: ${updateResult.body}"
+
+            if (updateResult.status == 204) { // Check if the update was successful
+                // Notify users
+                def notifyResult = post("/rest/api/2/issue/${issueKey}/notify")
+                    .header("Content-Type", "application/json")
+                    .body([
+                        subject: "Issue ${issueKey} has just been updated",
+                        htmlBody: "Defect ${issueKey} is out of SLA now!",
+                        to: [
+                            users: [
+                                [
+                                    accountId: '63060b97189e0a3a4ff283dc' // Replace with the actual account ID
+                                ]
+                            ]
+                        ]
+                    ])
+                    .asString()
+                
+                println "Notify Result Status: ${notifyResult.status}"
+                println "Notify Result Body: ${notifyResult.body}"
+                
+                // Send notification to webhook
+                def webhookUrl = 'https://hooks.slack.com/services/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'
+                def msg = [
+                    text: """Defect ${issueKey} <https://tideaccount.atlassian.net/browse/${issueKey}|${issue.fields.summary}> is now out of SLA.
+                    Please consider it!
+                    """
+                ]
+                
+                def webhookResponse = post(webhookUrl)
+                    .header('Content-Type', 'application/json')
+                    .body(msg)
+                    .asString()
+                
+                println "Webhook Response Status: ${webhookResponse.status}"
+                println "Webhook Response Body: ${webhookResponse.body}"
+            } else {
+                // Handle update failure if needed
+                println "Failed to update issue: ${issueKey}"
+            }
         } else {
-            // Handle update failure if needed
-            println "Failed to update issue: ${issueKey}"
+            println "Field ${selectListFieldId} is not empty for issue ${issueKey}, skipping..."
         }
     }
 } else {
