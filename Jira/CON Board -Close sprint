@@ -1,6 +1,6 @@
 import groovy.json.JsonBuilder
 
-    def webhookUrl = 'https://hooks.slack.com/services/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'
+    def webhookUrl = 'https://hooks.slack.com/services/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'
 
     def msg = [
         text: "The current sprint has now ended"
@@ -14,5 +14,6 @@ import groovy.json.JsonBuilder
         .asString()
 
     if (response.status != 200) {
-        log.error("Failed to send Slack notification: ${response.status} - ${response.body}")
+        println("Failed to send Slack notification: ${response.status} - ${response.body}")
     }
+
