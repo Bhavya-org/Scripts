@@ -1,18 +1,26 @@
 import groovy.json.JsonBuilder
 
-def webhookUrl = 'https://hooks.slack.com/services/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'
+def issueKey = issue.key
+def summary = issue.fields.summary
+def riskRating = issue.fields.customfield_10246?.value
+def technicalDomain = issue.fields.customfield_10167?.value
+def webhookUrl = 'https://hooks.slack.com/services/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'
 
 def msg = [
-    text: "The current sprint has now ended"
+    text: """New Vulnerability ticket with Proposed Risk Acceptance status
+https://bhavyass.atlassian.net/browse/${issueKey}: ${summary}
+Risk Rating is: ${riskRating}
+Technical Domain: ${technicalDomain}
+"""
 ]
 
 def postBody = new JsonBuilder(msg).toString()
 
-def issueKey = issue.key
 def status = issue.fields.status.name
 logger.info(status)
 def toStatusArray = ["Done"]
 
+// Assuming changelog is correctly populated elsewhere in your script
 for (item in changelog.items) {
     logger.info(item.field)
     if (item.field == "status") {
