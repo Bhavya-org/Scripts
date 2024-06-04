@@ -1,0 +1,38 @@
+import groovy.json.JsonBuilder
+
+def issueKey = issue.key
+def summary = issue.fields.summary
+def riskRating = issue.fields.customfield_10246?.value
+def technicalDomain = issue.fields.customfield_10167?.value
+def webhookUrl = 'https://hooks.slack.com/services/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'
+
+def msg = [
+    text: """New Vulnerability ticket with Proposed Risk Acceptance status
+https://bhavyass.atlassian.net/browse/${issueKey}: ${summary}
+Risk Rating is: ${riskRating}
+Technical Domain: ${technicalDomain}
+"""
+]
+
+def postBody = new JsonBuilder(msg).toString()
+
+def status = issue.fields.status.name
+logger.info(status)
+def toStatusArray = ["Done"]
+
+// Assuming changelog is correctly populated elsewhere in your script
+for (item in changelog.items) {
+    logger.info(item.field)
+    if (item.field == "status") {
+        if (toStatusArray.contains(item.toString) && status == "Done") {
+            def response = post(webhookUrl)
+                .header('Content-Type', 'application/json')
+                .body(postBody)
+                .asString()
+
+            if (response.status != 200) {
+                println("Failed to send Slack notification: ${response.status} - ${response.body}")
+            }
+        }
+    }
+}

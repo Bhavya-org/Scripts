@@ -1,0 +1,88 @@
+import groovy.json.JsonSlurper
+
+def projectKey = 'U11'
+def jqlQuery = URLEncoder.encode('project = "U11" AND issuetype = Task AND status not in (Closed, "In Progress","WIP") AND ((priority = "Medium" AND created <= -1d) OR (priority = High AND created <= -21d) OR (priority = Highest AND created <= -35d) OR (priority = Low AND created <= -60d)) ORDER BY cf[10072], cf[10073]', 'UTF-8')
+def searchUrl = "/rest/api/3/search?jql=${jqlQuery}"
+
+// Step 2: Search for issues matching the JQL query
+def searchResult = get(searchUrl).asObject(Map)
+
+// Print the raw response for debugging
+println "Search Result Status: ${searchResult.status}"
+println "Search Result Body: ${searchResult.body}"
+
+if (searchResult.status == 200 && searchResult.body.containsKey('issues')) {
+    def issues = searchResult.body.issues
+    println "Issues Found: ${issues.size()}"
+    def selectListFieldId = 'customfield_10075' // Replace 'customfield_10075' with your field ID
+    
+    issues.each { issue ->
+        def issueKey = issue.key
+        println "Processing Issue: ${issueKey}"
+        
+        // Check if the select list field is empty
+        def fieldValue = issue.fields[selectListFieldId]
+        if (fieldValue == null || fieldValue.value == null) {
+            println "Field ${selectListFieldId} is empty for issue ${issueKey}"
+
+            // Update issue field
+            def updateResult = put("/rest/api/2/issue/${issueKey}")
+                .header('Content-Type', 'application/json')
+                .body([
+                    fields: [
+                        (selectListFieldId): [value: "4"]
+                    ]
+                ])
+                .asString()
+            
+            println "Update Result Status: ${updateResult.status}"
+            println "Update Result Body: ${updateResult.body}"
+
+            if (updateResult.status == 204) { // Check if the update was successful
+                // Notify users
+                def notifyResult = post("/rest/api/2/issue/${issueKey}/notify")
+                    .header("Content-Type", "application/json")
+                    .body([
+                        subject: "Issue ${issueKey} has just been updated",
+                        htmlBody: "Defect ${issueKey} is out of SLA now!",
+                        to: [
+                            users: [
+                                [
+                                    accountId: '63060b97189e0a3a4ff283dc' // Replace with the actual account ID
+                                ]
+                            ]
+                        ]
+                    ])
+                    .asString()
+                
+                println "Notify Result Status: ${notifyResult.status}"
+                println "Notify Result Body: ${notifyResult.body}"
+                
+                // Send notification to webhook
+                def webhookUrl = 'https://hooks.slack.com/services/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'
+                def msg = [
+                    text: """Defect ${issueKey} <https://tideaccount.atlassian.net/browse/${issueKey}|${issue.fields.summary}> is now out of SLA.
+                    Please consider it!
+                    """
+                ]
+                
+                def webhookResponse = post(webhookUrl)
+                    .header('Content-Type', 'application/json')
+                    .body(msg)
+                    .asString()
+                
+                println "Webhook Response Status: ${webhookResponse.status}"
+                println "Webhook Response Body: ${webhookResponse.body}"
+            } else {
+                // Handle update failure if needed
+                println "Failed to update issue: ${issueKey}"
+            }
+        } else {
+            println "Field ${selectListFieldId} is not empty for issue ${issueKey}, skipping..."
+        }
+    }
+} else {
+    // Issue does not match the JQL query
+    println "No issues found or error in search query"
+    // Optionally, print a message or perform other actions here
+}

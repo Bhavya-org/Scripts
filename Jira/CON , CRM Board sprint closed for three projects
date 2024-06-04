@@ -1,0 +1,39 @@
+import groovy.json.JsonBuilder
+
+def boardId = sprint.originBoardId.toString()
+def webhookUrl
+def msgText
+
+switch (boardId) {
+    case '12':
+        webhookUrl = 'https://hooks.slack.com/services/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'
+        msgText = "The current sprint has now ended for board 12"
+        break
+    case '14':
+        webhookUrl = 'https://hooks.slack.com/services/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'
+        msgText = "The current sprint has now ended for board 14"
+        break
+    case '8':
+        webhookUrl = 'https://hooks.slack.com/services/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'
+        msgText = "The current sprint has now ended for board 8"
+        break
+    default:
+        println("No action for board ID: ${boardId}")
+        return
+}
+
+println(sprint.originBoardId)
+def msg = [
+    text: msgText
+]
+
+def postBody = new JsonBuilder(msg).toString()
+
+def response = post(webhookUrl)
+    .header('Content-Type', 'application/json')
+    .body(postBody)
+    .asString()
+
+if (response.status != 200) {
+    println("Failed to send Slack notification: ${response.status} - ${response.body}")
+}

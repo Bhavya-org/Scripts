@@ -1,0 +1,30 @@
+def issueKey = issue.key
+def project = "TU"
+def radioButton = issue.fields.customfield_10063?.value
+
+if (project == "TU" && radioButton == "a") {
+    // Only execute the action if project is "JP" and radioButton is "a"
+
+    println("Condition met. Executing action...")
+
+    def resp = post("/rest/api/2/issue/${issueKey}/notify")
+        .header("Content-Type", "application/json")
+        .body([
+            subject: "Assigned issue - ${issueKey}",
+            htmlBody: "test",
+            to: [
+                users: [
+                    [
+                        accountId: '63060b97189e0a3a4ff283dc'
+                    ]
+                ]
+            ]
+        ])
+        .asString()
+
+    // Handle response as needed
+    println("Response: ${resp}") // Print the response for verification
+} else {
+    // Condition not met, do nothing or handle differently
+    println("Condition not met. Skipping action...")
+}
