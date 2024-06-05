@@ -1,0 +1,21 @@
+def issueKey = issue.key
+def changeType = issue.fields.customfield_10005?.value
+def issueType = issue.fields.issuetype?.name
+def descriptionFromCurrentIssue = issue.fields.description
+
+if (issueType == "Story" && changeType == "Normal") {
+    def description = """
+    1. Updated by a script
+    2. Check for Script?
+    3. There are parameters/variables that are automatically available for use within your script...
+
+    ${descriptionFromCurrentIssue}
+    """
+
+    def result = put('/rest/api/2/issue/' + issueKey)
+        .header('Content-Type', 'application/json')
+        .body([fields: [description: description]])
+        .asString()
+
+    return result.status == 204 ? 'Success' : "${result.status}: ${result.body}"
+}
