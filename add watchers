@@ -1,0 +1,6 @@
+def issueKey = issue.key
+def watcherAccountId = '6305b88c958ffd78c6e0e59e' // Use the account ID of the watcher
+def result = post('/rest/api/3/issue/' + issueKey + '/watchers')
+        .header('Content-Type', 'application/json')
+        .body("\"${watcherAccountId}\"")
+        .asString()
