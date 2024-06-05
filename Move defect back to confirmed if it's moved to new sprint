@@ -1,0 +1,73 @@
+// Check if the sprint field has changed
+def sprintFieldChanged = changelog.items.any { item ->
+    item.field == "Sprint" && item.fieldtype == "custom" &&
+    (item.fromString ?: "") != (item.toString ?: "")
+}
+
+if (sprintFieldChanged) {
+    println("Sprint Field Changed: ${sprintFieldChanged}")
+
+    // Function to make REST API GET requests
+    def getRequest = { String url ->
+        return get(url)
+            .header('Content-Type', 'application/json')
+            .asObject(Map)
+    }
+
+    // Function to make REST API POST requests
+    def postRequest = { String url, Map body ->
+        return post(url)
+            .header('Content-Type', 'application/json')
+            .body(body)
+            .asObject(Map)
+    }
+
+    // Step 1: Define the JQL query
+    def jqlQuery = URLEncoder.encode("issuetype in (Story) and sprint in closedSprints() and status = Done and sprint not in openSprints()", 'UTF-8')
+    def searchUrl = "/rest/api/3/search?jql=${jqlQuery}"
+
+    // Step 2: Search for issues matching the JQL query
+    def searchResult = getRequest(searchUrl)
+
+    if (searchResult.status == 200 && searchResult.body.containsKey('issues')) {
+        def issues = searchResult.body.issues
+
+        issues.each { issue ->
+            def issueKey = issue.key
+
+            // Step 3: Transition the issue
+            def transitionResult = postRequest("/rest/api/3/issue/${issueKey}/transitions", ["transition": ["id": "11"]])
+            if (transitionResult.status == 204) {
+                println("Issue ${issueKey} transitioned successfully.")
+
+                // Step 4: Notify users
+                def notifyResult = post("/rest/api/2/issue/${issueKey}/notify")
+                    .header("Content-Type", "application/json")
+                    .body([
+                        subject: "Issue${issueKey} just has been updated",
+                        htmlBody: "FE fixversion has been just removed for PS",
+                        to: [
+                            users: [
+                                [
+                                    accountId: '63060b97189e0a3a4ff283dc'
+                                ]
+                            ]
+                        ]
+                    ])
+                    .asString()
+
+                if (notifyResult.status == 200) {
+                    println("Notification sent for issue ${issueKey}.")
+                } else {
+                    println("Failed to send notification for issue ${issueKey}.")
+                }
+            } else {
+                println("Failed to transition issue ${issueKey}.")
+            }
+        }
+    } else {
+        println("Failed to search for issues. Status: ${searchResult.status}")
+    }
+} else {
+    println("No sprint field changes detected.")
+}
