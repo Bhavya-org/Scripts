@@ -1,0 +1,16 @@
+def issueKey = issue.key
+def requestType = issue.fields.customfield_10010?.requestType?.name
+def priorityId = issue.fields.priority.name
+
+if (requestType == "Fix an account problem" && ["Low","Medium"].contains(priorityId)) {
+    def result = put('/rest/api/2/issue/' + issueKey)
+        .header('Content-Type', 'application/json')
+        .body([
+            fields:[
+                priority: [
+                    name: "High" // Assuming "1" is the ID for the High priority
+                ]
+            ]
+        ])
+        .asString()
+}
