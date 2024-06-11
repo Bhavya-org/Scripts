@@ -1,0 +1,40 @@
+def issueKey = issue.key
+logger.info("Issue Key: " + issueKey)
+
+// Define the target status we are looking for
+def targetStatus = ["In Progress"]
+
+// Get the current assignee's accountId
+def assignee = issue.fields.assignee?.accountId
+logger.info("Current Assignee Account ID: " + assignee)
+
+// Iterate over the changelog items
+for (item in changelog.items) {
+    // Check if the field is 'status'
+    if (item.field == "status") {
+        // Check if the status was changed to one of the target statuses
+        if (targetStatus.contains(item.toString)) {
+            def author = event.user.accountId
+            println(author)
+            
+            // Check if the author is different from the current assignee
+            if (author != assignee) {
+                logger.info("Updating assignee to:")
+                
+                // Update the assignee to the author of the transition
+                def updateResult = put("/rest/api/3/issue/${issueKey}/assignee")
+                    .header('Content-Type', 'application/json')
+                    .body([
+                        accountId: author
+                    ])
+                    .asString()
+                
+                if (updateResult.status == 204) {
+                    logger.info("Assignee updated successfully.")
+                } else {
+                    logger.error("Failed to update assignee: " + updateResult.body)
+                }
+            }
+        }
+    }
+}
