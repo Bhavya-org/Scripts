@@ -1,0 +1,43 @@
+def issueKey = issue.key
+logger.info("Issue Key: " + issueKey)
+
+def issuetype = issue.fields.issuetype.name
+def offices = issue.fields.customfield_10246?.value?.join(", ") // Use safe navigation operator for null safety
+def parentIssueId = issue.id
+def projectKey = issue.fields.project.key
+def subtaskIssueTypeId = "10006" // Replace with the actual subtask issue type ID
+def summary = "Subtask Summary" // Replace with the desired summary for the subtask
+
+// Iterate over the changelog items
+for (item in changelog.items) {
+    // Check if the field is 'offices' custom field (replace 'customfield_10246' with the actual ID)
+    if (item.fieldId == "customfield_10246") {
+        // Check if the conditions are met
+        if (issuetype != "initiative") {
+            // Create the subtask
+            def resp = post("/rest/api/3/issue")
+                .header("Content-Type", "application/json")
+                .body([
+                    fields: [
+                        project: [
+                            key: projectKey
+                        ],
+                        issuetype: [
+                            id: subtaskIssueTypeId
+                        ],
+                        parent: [
+                            key: issueKey
+                        ],
+                        summary: summary
+                    ]
+                ])
+                .asObject(Map)
+
+            if (resp.status == 201) {
+                logger.info("Subtask created successfully with key: " + resp.body.key)
+            } else {
+                logger.error("Failed to create subtask: " + resp.body)
+            }
+        }
+    }
+}
