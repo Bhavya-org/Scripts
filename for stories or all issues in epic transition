@@ -1,11 +1,11 @@
 def issueKey = issue.key
 logger.info("Issue Key: " + issueKey)
 
-def toStatusArray = ["Done"]
-def targetStatusId = "41" // Replace with the actual transition ID for "Waiting for Customer"
+def toStatusArray = ["Done", "Closed"]
 
-// Check if the issue is transitioning to "Done"
-if (toStatusArray.contains(issue.fields.status.name)) {
+// Check if the issue is transitioning to a status in toStatusArray
+def targetStatusName = issue.fields.status.name
+if (toStatusArray.contains(targetStatusName)) {
 
     // Check if the issue is an epic
     if (issue.fields.issuetype.name == "Epic") {
@@ -25,24 +25,46 @@ if (toStatusArray.contains(issue.fields.status.name)) {
                 def epicIssueStatus = epicIssue.fields.status.name
                 logger.info("Checking issue: " + epicIssueKey + " - Status: " + epicIssueStatus)
 
-                // Transition each issue to "Waiting for Customer"
-                if (epicIssueStatus != "Waiting for Customer") {
-                    def transition = post("/rest/api/3/issue/${epicIssueKey}/transitions")
+                // Only transition the issue if it is not already in the target status
+                if (epicIssueStatus != targetStatusName) {
+                    // Fetch available transitions for the issue
+                    def transitions = get("/rest/api/3/issue/${epicIssueKey}/transitions")
                         .header("Content-Type", "application/json")
-                        .body([transition: [id: targetStatusId]])
                         .asObject(Map)
 
-                    if (transition.status == 204) {
-                        logger.info("Issue transitioned successfully: " + epicIssueKey)
+                    def targetTransitionId = null
+                    for (transition in transitions.body.transitions) {
+                        if (transition.to.name == targetStatusName) {
+                            targetTransitionId = transition.id
+                            break
+                        }
+                    }
+
+                    if (targetTransitionId != null) {
+                        // Transition the issue to the target status
+                        def transition = post("/rest/api/3/issue/${epicIssueKey}/transitions")
+                            .header("Content-Type", "application/json")
+                            .body([transition: [id: targetTransitionId]])
+                            .asObject(Map)
+
+                        if (transition.status == 204) {
+                            logger.info("Issue transitioned successfully: " + epicIssueKey)
+                        } else {
+                            logger.error("Failed to transition issue: " + epicIssueKey + ", response: " + transition.body)
+                        }
                     } else {
-                        logger.error("Failed to transition issue: " + epicIssueKey + ", response: " + transition.body)
+                        logger.error("No transition found for status: " + targetStatusName + " for issue: " + epicIssueKey)
                     }
                 } else {
-                    logger.info("Issue already in 'Waiting for Customer' status: " + epicIssueKey)
+                    logger.info("Issue already in target status: " + epicIssueKey)
                 }
             }
         } else {
             logger.error("Failed to fetch issues in the epic: " + epicIssues.body)
         }
+    } else {
+        logger.error("The issue is not an epic.")
     }
+} else {
+    logger.info("The issue is not transitioning to a monitored status.")
 }
