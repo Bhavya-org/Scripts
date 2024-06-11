@@ -1,0 +1,48 @@
+def issueKey = issue.key
+logger.info("Issue Key: " + issueKey)
+
+def toStatusArray = ["Done"]
+def targetStatusId = "41" // Replace with the actual transition ID for "Waiting for Customer"
+
+// Check if the issue is transitioning to "Done"
+if (toStatusArray.contains(issue.fields.status.name)) {
+
+    // Check if the issue is an epic
+    if (issue.fields.issuetype.name == "Epic") {
+        def epicKey = issue.key
+        logger.info("Epic Issue Key: " + epicKey)
+
+        // Get all issues in the epic (using the epic key)
+        def epicIssues = get("/rest/api/3/search")
+            .queryString("jql", "'Epic Link' = '${epicKey}'")
+            .queryString("fields", "key,status")
+            .asObject(Map)
+
+        if (epicIssues.status == 200) {
+            def issues = epicIssues.body.issues
+            for (epicIssue in issues) {
+                def epicIssueKey = epicIssue.key
+                def epicIssueStatus = epicIssue.fields.status.name
+                logger.info("Checking issue: " + epicIssueKey + " - Status: " + epicIssueStatus)
+
+                // Transition each issue to "Waiting for Customer"
+                if (epicIssueStatus != "Waiting for Customer") {
+                    def transition = post("/rest/api/3/issue/${epicIssueKey}/transitions")
+                        .header("Content-Type", "application/json")
+                        .body([transition: [id: targetStatusId]])
+                        .asObject(Map)
+
+                    if (transition.status == 204) {
+                        logger.info("Issue transitioned successfully: " + epicIssueKey)
+                    } else {
+                        logger.error("Failed to transition issue: " + epicIssueKey + ", response: " + transition.body)
+                    }
+                } else {
+                    logger.info("Issue already in 'Waiting for Customer' status: " + epicIssueKey)
+                }
+            }
+        } else {
+            logger.error("Failed to fetch issues in the epic: " + epicIssues.body)
+        }
+    }
+}
