@@ -1,0 +1,42 @@
+def issueKey = issue.key
+def requestType = issue.fields.customfield_10010?.requestType?.name
+def creator = issue.fields.creator?.accountId
+println(creator)
+
+// Check conditions
+if (requestType == "Fix an account problem" && creator !="6305b88c958ffd78c6e0e59e") {
+    def newRequestParticipants = [
+        [
+            "accountId": "63060b97189e0a3a4ff283dc"
+        ]
+    ]
+    
+    // Send notification
+    def resp = post("/rest/api/2/issue/${issueKey}/notify")
+        .header("Content-Type", "application/json")
+        .body([
+            subject: "A request has been raised at People Service Desk that needs your review.",
+            htmlBody: """ Kindly follow th elink to browse the issue.
+            https://${issueKey}
+            """,
+            to: [
+                users: newRequestParticipants
+            ]
+        ])
+        .asString()
+    
+    // Update the request participants field
+    def updateResult = put("/rest/api/2/issue/${issueKey}")
+        .header("Content-Type", "application/json")
+        .body([
+            fields: [
+                customfield_10127: newRequestParticipants // Use the correct custom field ID
+            ]
+        ])
+        .asString()
+    
+    // Return a message if the update is successful
+    if (updateResult.status == 204) return "Request participants updated successfully."
+}
+// Return an error message if the conditions are not met
+return "Conditions not met or request failed"
