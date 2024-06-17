@@ -1,0 +1,17 @@
+def issueKey = issue.key
+def summary = issue.fields.summary
+
+if (["New security vendor approval:"].contains(summary))
+{
+def transition = post("/rest/api/2/issue/" + issueKey + "/transitions")
+.header("Content-Type", "application/json")
+.body([transition: [id: 21]])
+.asObject(Map)
+if (transition.status == 204) {
+        println("Transition done")
+    } else {
+        println("Transition failed: ${transition.status} - ${transition.body}")
+    }
+} else {
+    println("Condition not met")
+}
