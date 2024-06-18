@@ -1,0 +1,45 @@
+def issueKey = issue.key
+logger.info("Issue Key: " + issueKey)
+
+def parentIssueId = issue.id
+def projectKey = issue.fields.project.key
+def subtaskIssueTypeId = "10006" // Replace with the actual subtask issue type ID
+def fromStatusArray = ["In Progress"]
+def toStatusArray = ["Closed"]
+
+for (item in changelog.items) {
+    logger.info(item.field)
+    if (item.field == "status") {
+        if (fromStatusArray.contains(item.fromString) && toStatusArray.contains(item.toString)) {
+
+            def summaries = ["Subtask Summary 1", "Subtask Summary 2"] // Replace with the desired summaries
+
+            summaries.each { summary ->
+                // Create the subtask
+                def resp = post("/rest/api/3/issue")
+                    .header("Content-Type", "application/json")
+                    .body([
+                        fields: [
+                            project: [
+                                key: projectKey
+                            ],
+                            issuetype: [
+                                id: subtaskIssueTypeId
+                            ],
+                            parent: [
+                                key: issueKey
+                            ],
+                            summary: summary
+                        ]
+                    ])
+                    .asObject(Map)
+
+                if (resp.status == 201) {
+                    logger.info("Subtask created successfully with key: " + resp.body.key)
+                } else {
+                    logger.error("Failed to create subtask: " + resp.body)
+                }
+            }
+        }
+    }
+}
