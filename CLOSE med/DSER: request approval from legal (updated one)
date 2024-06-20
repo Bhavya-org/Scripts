@@ -1,0 +1,73 @@
+def issueKey = issue.key
+def reporter = issue.fields.reporter.accountId
+def requestType = issue.fields.customfield_10010?.requestType?.name
+def changeType = issue.fields.customfield_10005?.value
+
+// Check conditions
+if (requestType == "Fix an account problem") {
+    // Update the request participants field with the correct structure
+    def newRequestParticipants = [
+        [
+            "accountId": "6305b88c958ffd78c6e0e59e"
+        ],
+        [
+            "accountId": "630a0d15ec02b5f28b63a024"
+        ]
+    ]
+
+    // Calculate due date 30 days from today
+    def today = new Date()
+    def dueDate = today + 30
+
+    def result = put("/rest/api/2/issue/${issueKey}")
+        .header('Content-Type', 'application/json')
+        .body([
+            fields: [
+                customfield_10127: newRequestParticipants,
+                customfield_10005: [value: "Normal"],
+                labels: ["dser_legal_sign_of_requested"],
+                duedate: dueDate.format('yyyy-MM-dd')
+            ]
+        ])
+        .asString()
+
+    // Comment text
+    def commentText1 = """
+        AUTOMATED MESSAGE1:
+        This ticket with a HIGH priority is in status "waiting for creator" for 1 day.
+        The ticket will be deprioritized to medium after 5 days.
+    """
+
+    // Step 2: Get existing comments for the issue
+    def commentsResult = get('/rest/api/2/issue/' + issueKey + '/comment')
+        .header('Content-Type', 'application/json')
+        .asObject(Map)
+
+    // Step 3: Check for duplicate comments
+    def comments = commentsResult.body.comments
+    def commentAlreadyExists = comments.any { comment ->
+        comment.body.contains(commentText1.trim())
+    }
+
+        if (!commentAlreadyExists) {
+            // Step 4: Add the new comment only if it doesn't already exist
+            def addCommentResult = post('/rest/api/2/issue/' + issueKey + '/comment')
+                .header('Content-Type', 'application/json')
+                .body(["body": commentText1.trim()])
+                .asObject(Map)
+
+            println("Comment added. Response: ${addCommentResult}")
+        } else {
+            println("Duplicate comment found, not adding a new one.")
+        }
+
+        // Transition the issue
+        def transition = post("/rest/api/2/issue/${issueKey}/transitions")
+            .header("Content-Type", "application/json")
+            .body([transition: [id: 11]])
+            .asObject(Map)
+
+        println("Transitioned issue. Response: ${transition}")
+    } else {
+        println("Condition not met, skipping the actions.")
+    }
