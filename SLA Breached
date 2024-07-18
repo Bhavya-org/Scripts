@@ -1,0 +1,63 @@
+def jqlQuery = 'project = "JP" AND "Time to resolution" = breached() AND issuetype= "[System] Service request"'
+def allIssues = get("/rest/api/2/search")
+    .queryString("jql", jqlQuery)
+    .asObject(Map)
+
+// Check if the request to fetch issues was successful
+if (allIssues.status != 200) {
+    return "Failed to fetch issues: Status: ${allIssues.status} ${allIssues.body}"
+}
+
+def result = allIssues.body.issues as List<Map>
+
+// Iterate over each issue and transition if not already transitioned
+result.each { issue ->
+    def issueKey = issue.key
+    
+    // Fetch the issue property to check if it has been transitioned
+    def issuePropertyResponse = get("/rest/api/2/issue/${issueKey}/properties/transitionedForSLA")
+        .header('Accept', 'application/json')
+        .asObject(Map)
+
+    if (issuePropertyResponse.status == 200) {
+        def propertyValue = issuePropertyResponse.body.value as Map
+        if (propertyValue.transitionedForSLA == 1) {
+            logger.info("Transition for issue ${issueKey} has already been performed. Skipping.")
+            return
+        }
+    } else if (issuePropertyResponse.status == 404) {
+        logger.info("Property 'transitionedForSLA' does not exist for issue ${issueKey}. Proceeding with transition.")
+    } else {
+        logger.error("Failed to fetch issue property: ${issuePropertyResponse.status} - ${issuePropertyResponse.body}")
+        return
+    }
+
+    // Perform the transition
+    def transitionResponse = post("/rest/api/3/issue/${issueKey}/transitions")
+        .header('Content-Type', 'application/json')
+        .body([
+            transition: [
+                id: 31
+            ]
+        ])
+        .asString()
+
+    // Check the response and log the result
+    if (transitionResponse.status == 204) {
+        logger.info("Transition performed successfully for issue ${issueKey}")
+
+        // Update the issue property to mark it as transitioned
+        def updatePropertyResponse = put("/rest/api/2/issue/${issueKey}/properties/transitionedForSLA")
+            .header('Content-Type', 'application/json')
+            .body(["transitionedForSLA": 1])
+            .asString()
+
+        if (updatePropertyResponse.status == 200 || updatePropertyResponse.status == 201) {
+            logger.info("Issue property updated successfully for issue ${issueKey}")
+        } else {
+            logger.error("Failed to update issue property: ${updatePropertyResponse.status} - ${updatePropertyResponse.body}")
+        }
+    } else {
+        logger.error("Failed to perform transition: ${transitionResponse.status} - ${transitionResponse.body}")
+    }
+}
