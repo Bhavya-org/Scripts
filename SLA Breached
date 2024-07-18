@@ -1,4 +1,4 @@
-def jqlQuery = 'project = "JP" AND "Time to resolution" = breached() AND issuetype= "[System] Service request"'
+def jqlQuery = 'project = "JP" AND "Time to resolution" = breached() and status in (Implementing,"Work in progress","In Progress" )'
 def allIssues = get("/rest/api/2/search")
     .queryString("jql", jqlQuery)
     .asObject(Map)
@@ -32,12 +32,22 @@ result.each { issue ->
         return
     }
 
+    // Determine the transition ID based on the issue properties or other criteria
+    def transitionId
+    if (issue.fields.status.name == "Implementing") {
+        transitionId = 9028 // Example transition ID for high priority issues
+    } else if (issue.fields.status.name == "Work in progress") {
+        transitionId = 61 // Example transition ID for medium priority issues
+    } else {
+        transitionId = 31 // Example transition ID for other issues
+    }
+
     // Perform the transition
     def transitionResponse = post("/rest/api/3/issue/${issueKey}/transitions")
         .header('Content-Type', 'application/json')
         .body([
             transition: [
-                id: 31
+                id: transitionId
             ]
         ])
         .asString()
