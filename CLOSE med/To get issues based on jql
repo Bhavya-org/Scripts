@@ -1,0 +1,32 @@
+import java.net.URLEncoder
+
+// Function to make REST API GET requests
+def getRequest(String url) {
+    return get(url)
+        .header('Content-Type', 'application/json')
+        .asObject(Map)
+}
+
+// Step 1: Define the JQL query
+def projectKey = 'U9'
+def jqlQuery = URLEncoder.encode("project = ${projectKey} AND status = \"To Do\" AND priority = \"Medium\" AND NOT status CHANGED AFTER -1d", 'UTF-8')
+def searchUrl = "/rest/api/3/search?jql=${jqlQuery}"
+
+// Step 2: Search for issues matching the JQL query
+def searchResult = getRequest(searchUrl)
+
+if (searchResult.status == 200 && searchResult.body.containsKey('issues')) {
+    def issues = searchResult.body.issues
+
+    // Print issue details
+    issues.each { issue ->
+        println("Issue Key: ${issue.key}")
+        println("Summary: ${issue.fields.summary}")
+        println("Status: ${issue.fields.status.name}")
+        println("Priority: ${issue.fields.priority.name}")
+        println("Created: ${issue.fields.created}")
+        println("-------------------------------------")
+    }
+} else {
+    println("Failed to search for issues. Status: ${searchResult.status}")
+}
