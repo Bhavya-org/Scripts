@@ -1,0 +1,38 @@
+def issueKey = "ROAD-83"
+// Retrieve the issue changelog
+def changelogResponse = get("/rest/api/2/issue/${issueKey}?expand=changelog")
+        .header("Content-Type", "application/json")
+        .asObject(Map)
+
+// Extract the changelog histories
+def histories = changelogResponse.body.changelog.histories
+
+// Count changes for the assignee and sprint fields
+def assigneeChangeCount = histories.count { history ->
+    history.items.any { item -> item.field == "assignee" }
+}
+
+def sprintChangeCount = histories.count { history ->
+    history.items.any { item -> item.fieldId == "customfield_10020" } // For the sprint field
+}
+
+// Print the count of assignee and sprint field changes
+println("The assignee field has changed ${assigneeChangeCount} times.")
+println("The sprint field has changed ${sprintChangeCount} times.")
+
+// Update the custom fields with the respective counts
+def updateResponse = put("/rest/api/2/issue/${issueKey}")
+        .header("Content-Type", "application/json")
+        .body([
+            fields: [
+                customfield_10267: assigneeChangeCount, // Store assignee change count in customfield_10267
+                customfield_10268: sprintChangeCount // Store sprint change count in customfield_10268 (replace with your actual custom field ID)
+            ]
+        ])
+        .asString()
+
+if (updateResponse.status == 204) {
+    println("Custom fields updated successfully.")
+} else {
+    println("Failed to update custom fields: ${updateResponse.status} - ${updateResponse.body}")
+}
